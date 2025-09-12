@@ -9,6 +9,7 @@
 #define GREEN "\033[1;32m"
 #define YELLOW "\033[1;33m"
 #define CYAN "\033[1;36m"
+#define ORANGE "\033[38;5;208m"
 
 enum PrincipleMenu
 {
@@ -128,7 +129,7 @@ void inputNumber(const char *prompt, const char *format, void *var)
     printf(CYAN "%s" RESET, prompt);
     while (scanf(format, var) != 1)
     {
-        printf("Invalid input. Try again: ");
+        printf(YELLOW "Invalid input. Try again: " RESET);
         clear_buffer();
     }
     clear_buffer();
@@ -151,7 +152,7 @@ void isValid(const char *prompt, char validList[][100], int listSize, char *var,
         }
         if (!isValidInput)
         {
-            printf("Invalid input! Please enter a valid option.\n");
+            printf(YELLOW "Invalid input! Please enter a valid option.\n" RESET);
         }
     } while (!isValidInput);
 }
@@ -161,7 +162,7 @@ void saveToFile(const Player *arr)
     FILE *fp = fopen("./players.dat", "wb");
     if (fp == NULL)
     {
-        printf("Error: Unable to save to file!\n");
+        printf(RED "Error: Unable to save to file!\n" RESET);
         return;
     }
     if (players_count > 0)
@@ -176,7 +177,7 @@ void loadFromFile(Player **arr)
     FILE *fp = fopen("./players.dat", "rb");
     if (fp == NULL)
     {
-        printf("No existing data file found. Starting fresh.\n");
+        printf(YELLOW "No existing data file found. Starting fresh.\n" RESET);
         players_count = 0;
         *arr = NULL;
         return;
@@ -188,7 +189,7 @@ void loadFromFile(Player **arr)
 
     if (fileSize == 0)
     {
-        printf("Data file is empty. Starting fresh.\n");
+        printf(ORANGE "Data file is empty. Starting fresh.\n" RESET);
         players_count = 0;
         *arr = NULL;
         fclose(fp);
@@ -200,7 +201,7 @@ void loadFromFile(Player **arr)
 
     if (*arr == NULL)
     {
-        printf("Error: Memory allocation failed!\n");
+        printf(RED "Error: Memory allocation failed!\n" RESET);
         players_count = 0;
         fclose(fp);
         return;
@@ -209,12 +210,12 @@ void loadFromFile(Player **arr)
     int items_read = fread(*arr, sizeof(Player), players_count, fp);
     if (items_read != players_count)
     {
-        printf("Warning: Could not read all players from file!\n");
+        printf(YELLOW "Warning: Could not read all players from file!\n" YELLOW);
         players_count = items_read;
     }
 
     fclose(fp);
-    printf("Loaded %d players from file.\n", players_count);
+    printf(ORANGE "Loaded %d players from file.\n" RESET, players_count);
 }
 
 void setCurrentDate(Date *date)
@@ -245,7 +246,7 @@ void displayPlayers(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to display!\n");
+        printf(ORANGE "No players to display!\n" RESET);
         return;
     }
 
@@ -281,7 +282,7 @@ void addPlayers(Player **arr, int n)
         *arr = realloc(*arr, (players_count + 1) * sizeof(Player));
         if (*arr == NULL)
         {
-            printf("Error: Memory allocation failed!\n");
+            printf(RED "Error: Memory allocation failed!\n" RESET);
             return;
         }
 
@@ -290,10 +291,10 @@ void addPlayers(Player **arr, int n)
 
         if (newPlayer.goals >= 10)
         {
-            printf("This player is a high scorer!\n");
+            printf(ORANGE "This player is a high scorer!\n" RESET);
         }
 
-        printf("Player added successfully!\n");
+        printf(GREEN "Player added successfully!\n" RESET);
     }
     saveToFile(*arr);
 }
@@ -302,11 +303,11 @@ void sortPlayers(Player **arr, const char attr[])
 {
     if (players_count == 0)
     {
-        printf("No players to display!\n");
+        printf(ORANGE "No players to display!\n" RESET);
         return;
     }
 
-    printf("Sorting players by %s...\n", attr);
+    printf(ORANGE "Sorting players by %s...\n" RESET, attr);
     char direction[5];
     do
     {
@@ -314,7 +315,7 @@ void sortPlayers(Player **arr, const char attr[])
 
         if (strcmp(direction, "asc") != 0 && strcmp(direction, "desc") != 0)
         {
-            printf("Invalid direction! Please enter 'asc' or 'desc'.\n");
+            printf(YELLOW "Invalid direction! Please enter 'asc' or 'desc'.\n" RESET);
         }
     } while (strcmp(direction, "asc") != 0 && strcmp(direction, "desc") != 0);
 
@@ -369,7 +370,7 @@ void sortPlayers(Player **arr, const char attr[])
     }
 
     saveToFile(*arr);
-    printf("Players sorted successfully!\n");
+    printf(GREEN "Players sorted successfully!\n" RESET);
     displayPlayers(arr);
 }
 
@@ -377,14 +378,14 @@ void displayPlayersByPost(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to display!\n");
+        printf(ORANGE "No players to display!\n" RESET);
         return;
     }
 
     int found = 0;
     for (int i = 0; i < 4; i++)
     {
-        printf("\n--- Players in role: %s ---\n", validRoles[i]);
+        printf(ORANGE "\n--- Players in role: %s ---\n" RESET, validRoles[i]);
         found = 0;
         for (int j = 0; j < players_count; j++)
         {
@@ -396,7 +397,7 @@ void displayPlayersByPost(Player **arr)
         }
         if (!found)
         {
-            printf("No players found in this role.\n");
+            printf(YELLOW "No players found in this role.\n" RESET);
         }
     }
 }
@@ -405,7 +406,7 @@ void updatePlayerPost(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to update!\n");
+        printf(ORANGE "No players to update!\n" RESET);
         return;
     }
 
@@ -429,11 +430,11 @@ void updatePlayerPost(Player **arr)
     if (found)
     {
         saveToFile(*arr);
-        printf("Player role updated successfully!\n");
+        printf(GREEN "Player role updated successfully!\n" RESET);
     }
     else
     {
-        printf("Player not found!\n");
+        printf(ORANGE "Player not found!\n" RESET);
     }
 }
 
@@ -441,7 +442,7 @@ void updatePlayerAge(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to update!\n");
+        printf(ORANGE "No players to update!\n" RESET);
         return;
     }
 
@@ -449,13 +450,12 @@ void updatePlayerAge(Player **arr)
     long id;
     inputNumber("Enter player ID: ", "%ld", &id);
 
-    inputNumber("Enter new age: ", "%d", &newAge);
-
     int found = 0;
     for (int i = 0; i < players_count; i++)
     {
         if ((*arr)[i].id == id)
         {
+            inputNumber("Enter new age: ", "%d", &newAge);
             (*arr)[i].age = newAge;
             found = 1;
             break;
@@ -465,11 +465,11 @@ void updatePlayerAge(Player **arr)
     if (found)
     {
         saveToFile(*arr);
-        printf("Player age updated successfully!\n");
+        printf(GREEN "Player age updated successfully!\n" RESET);
     }
     else
     {
-        printf("Player not found!\n");
+        printf(ORANGE "Player not found!\n" RESET);
     }
 }
 
@@ -477,7 +477,7 @@ void updatePlayerGoals(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to update!\n");
+        printf(ORANGE "No players to update!\n" RESET);
         return;
     }
 
@@ -485,13 +485,12 @@ void updatePlayerGoals(Player **arr)
     long id;
     inputNumber("Enter player ID: ", "%ld", &id);
 
-    inputNumber("Enter new goals: ", "%d", &newGoals);
-
     int found = 0;
     for (int i = 0; i < players_count; i++)
     {
         if ((*arr)[i].id == id)
         {
+            inputNumber("Enter new goals: ", "%d", &newGoals);
             (*arr)[i].goals = newGoals;
             found = 1;
             break;
@@ -503,14 +502,14 @@ void updatePlayerGoals(Player **arr)
         saveToFile(*arr);
         if (newGoals >= 10)
         {
-            printf("This player is a high scorer!\n");
+            printf(ORANGE "This player is a high scorer!\n" RESET);
         }
 
-        printf("Player goals updated successfully!\n");
+        printf(GREEN "Player goals updated successfully!\n" RESET);
     }
     else
     {
-        printf("Player not found!\n");
+        printf(ORANGE "Player not found!\n" RESET);
     }
 }
 
@@ -518,7 +517,7 @@ void deletePlayer(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to delete!\n");
+        printf(ORANGE "No players to delete!\n" RESET);
         return;
     }
 
@@ -526,26 +525,29 @@ void deletePlayer(Player **arr)
     inputNumber("Enter player ID to delete: ", "%ld", &id);
 
     char confirmation;
-    do
-    {
-        handle_fgets_input("Are you sure you want to delete this player? (y/n): ", &confirmation, sizeof(confirmation));
-        if (confirmation != 'y' && confirmation != 'n')
-        {
-            printf("Invalid input! Please enter 'y' or 'n'.\n");
-        }
-    } while (confirmation != 'y' && confirmation != 'n');
-
-    if (confirmation == 'n')
-    {
-        printf("Deletion cancelled.\n");
-        return;
-    }
 
     int found = 0;
     for (int i = 0; i < players_count; i++)
     {
         if ((*arr)[i].id == id)
         {
+            do
+            {
+                printf(CYAN "Are you sure you want to delete this player? (y/n): " RESET);
+                scanf(" %c", &confirmation);
+                clear_buffer();
+
+                if (confirmation != 'y' && confirmation != 'n')
+                {
+                    printf(YELLOW "Invalid input! Please enter 'y' or 'n'.\n" RESET);
+                }
+            } while (confirmation != 'y' && confirmation != 'n');
+
+            if (confirmation == 'n')
+            {
+                printf(ORANGE "Deletion cancelled.\n" RESET);
+                return;
+            }
             for (int j = i; j < players_count - 1; j++)
             {
                 (*arr)[j] = (*arr)[j + 1];
@@ -560,11 +562,11 @@ void deletePlayer(Player **arr)
     if (found)
     {
         saveToFile(*arr);
-        printf("Player deleted successfully!\n");
+        printf(GREEN "Player deleted successfully!\n" RESET);
     }
     else
     {
-        printf("Player not found!\n");
+        printf(ORANGE "Player not found!\n" RESET);
     }
 }
 
@@ -572,7 +574,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
 {
     if (players_count == 0)
     {
-        printf("No players to search!\n");
+        printf(ORANGE "No players to search!\n" RESET);
         return;
     }
 
@@ -595,7 +597,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("Player not found!\n");
+            printf(ORANGE "Player not found!\n" RESET);
         }
         break;
     }
@@ -615,7 +617,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("No players found with this first name!\n");
+            printf(ORANGE "No players found with this first name!\n" RESET);
         }
         break;
     }
@@ -635,7 +637,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("No players found with this last name!\n");
+            printf(ORANGE "No players found with this last name!\n" RESET);
         }
         break;
     }
@@ -655,7 +657,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("No players found with this age!\n");
+            printf(ORANGE "No players found with this age!\n" RESET);
         }
         break;
     }
@@ -675,7 +677,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("No players found with this number!\n");
+            printf(ORANGE "No players found with this number!\n" RESET);
         }
         break;
     }
@@ -695,7 +697,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("No players found with this role!\n");
+            printf(ORANGE "No players found with this role!\n" RESET);
         }
         break;
     }
@@ -715,7 +717,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("No players found with this number of goals!\n");
+            printf(ORANGE "No players found with this number of goals!\n" RESET);
         }
         break;
     }
@@ -735,7 +737,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("No players found with this status!\n");
+            printf(ORANGE "No players found with this status!\n" RESET);
         }
         break;
     }
@@ -747,7 +749,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
 
         if (minAge > maxAge)
         {
-            printf("Invalid range! Minimum age cannot be greater than maximum age.\n");
+            printf(YELLOW "Invalid range! Minimum age cannot be greater than maximum age.\n" RESET);
             return;
         }
 
@@ -762,14 +764,14 @@ void searchPlayerByAttr(Player **arr, const int attr)
         }
         if (!found)
         {
-            printf("No players found in this age range!\n");
+            printf(ORANGE "No players found in this age range!\n" RESET);
         }
         break;
     }
     case 10:
         break;
     default:
-        printf("Search by this attribute is not implemented yet.\n");
+        printf(YELLOW "Search by this attribute is not implemented yet.\n" RESET);
     }
 }
 
@@ -782,7 +784,7 @@ void displayAvgAge(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to calculate average age!\n");
+        printf(ORANGE "No players to calculate average age!\n" RESET);
         return;
     }
 
@@ -799,7 +801,7 @@ void displayPlayersWithNGoals(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to display!\n");
+        printf(ORANGE "No players to display!\n" RESET);
         return;
     }
 
@@ -819,7 +821,7 @@ void displayPlayersWithNGoals(Player **arr)
 
     if (!found)
     {
-        printf("No players found with at least %d goals.\n", n);
+        printf(ORANGE "No players found with at least %d goals.\n" RESET, n);
     }
 }
 
@@ -827,7 +829,7 @@ void displayBestScorer(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to display!\n");
+        printf(ORANGE "No players to display!\n" RESET);
         return;
     }
 
@@ -854,7 +856,7 @@ void displayMinMaxAge(Player **arr)
 {
     if (players_count == 0)
     {
-        printf("No players to display!\n");
+        printf(ORANGE "No players to display!\n" RESET);
         return;
     }
 
@@ -957,7 +959,7 @@ int main()
             case 3:
                 break;
             default:
-                printf("Invalid choice\n");
+                printf(YELLOW "Invalid choice\n" RESET);
             }
             break;
         }
@@ -991,7 +993,7 @@ int main()
             case 5:
                 break;
             default:
-                printf("Invalid choice\n");
+                printf(YELLOW "Invalid choice\n" RESET);
             }
             break;
         }
@@ -1020,7 +1022,7 @@ int main()
             case 4:
                 break;
             default:
-                printf("Invalid choice\n");
+                printf(YELLOW "Invalid choice\n" RESET);
             }
             break;
         }
@@ -1080,17 +1082,17 @@ int main()
             case 6:
                 break;
             default:
-                printf("Invalid choice\n");
+                printf(YELLOW "Invalid choice\n" RESET);
             }
             break;
         }
         case EXIT:
             if (Players)
                 free(Players);
-            printf("Goodbye!\n");
+            printf(ORANGE "Goodbye!\n" RESET);
             exit(0);
         default:
-            printf("Invalid choice\n");
+            printf(YELLOW "Invalid choice\n" RESET);
         }
     }
     return 0;
