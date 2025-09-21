@@ -3,6 +3,8 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <stdbool.h>
+#include <regex.h>
 
 #define RESET "\033[0m"
 #define RED "\033[4;31m"
@@ -10,6 +12,13 @@
 #define YELLOW "\033[1;33m"
 #define CYAN "\033[1;36m"
 #define ORANGE "\033[38;5;208m"
+
+enum Setings {
+  MAX_ROLES = 15,
+  MAX_STATUS = 3,
+  MAX_PLAYERS = 23,
+  MAX_FORMATIONS = 8
+};
 
 enum PrincipleMenu
 {
@@ -19,6 +28,7 @@ enum PrincipleMenu
     DELETE,
     SEARCH,
     STATISTICS,
+    UPDATE_FORMATION,
     EXIT
 };
 
@@ -38,8 +48,12 @@ enum DisplayMenu
 
 enum UpdateMenu
 {
-    UPDATE_POST = 1,
+    UPDATE_FIRST_NAME = 1,
+    UPDATE_LAST_NAME,
     UPDATE_AGE,
+    UPDATE_NUMBER,
+    UPDATE_POST,
+    UPDATE_STATUS,
     UPDATE_GOALS
 };
 
@@ -72,11 +86,113 @@ typedef struct Date
     int year;
 } Date;
 
-char validRoles[][100] = {"gardien", "defenseur", "milieu", "attaquant"};
-char validStatus[][100] = {"titulaire", "remplacant"};
+char validRoles[][100] = {
+    "goalkeeper", "right back", "left back", "center back",
+    "right wing back", "left wing back", "defensive midfielder",
+    "central midfielder", "attacking midfielder",
+    "left midfielder", "right midfielder",
+    "left winger", "right winger",
+    "center forward", "striker"
+};
 
-#define MAX_ROLES 4
-#define MAX_STATUS 2
+int maxPlayersPerRole[MAX_ROLES] = {
+    3,2,2,5,1,1,3,4,2,2,2,2,2,2,3
+};
+
+int countRoles[MAX_ROLES] = {0};
+
+char validStatus[][100] = {"starting", "bench", "not summoned"};
+
+int maxPlayersPerStatus[MAX_ROLES] = {11,7,23};
+
+int countStatus[MAX_STATUS] = {0};
+
+char formations[MAX_FORMATIONS][100] = {
+    "4-3-3",
+    "4-4-2",
+    "4-2-3-1",
+    "4-5-1",
+    "3-5-2",
+    "3-4-3",
+    "5-3-2",
+    "5-4-1"
+};
+
+char formationRoles[MAX_FORMATIONS][11][100] = {
+    // ---- 4-3-3 ----
+    {
+        "goalkeeper",
+        "right back", "left back", "center back", "center back",
+        "defensive midfielder", "central midfielder", "central midfielder",
+        "left winger", "right winger", "striker"
+    },
+
+    // ---- 4-4-2 ----
+    {
+        "goalkeeper",
+        "right back", "left back", "center back", "center back",
+        "left midfielder", "right midfielder",
+        "central midfielder", "central midfielder",
+        "striker", "striker"
+    },
+
+    // ---- 4-2-3-1 ----
+    {
+        "goalkeeper",
+        "right back", "left back", "center back", "center back",
+        "defensive midfielder", "defensive midfielder",
+        "left midfielder", "attacking midfielder", "right midfielder",
+        "striker"
+    },
+
+    // ---- 4-5-1 ----
+    {
+        "goalkeeper",
+        "right back", "left back", "center back", "center back",
+        "defensive midfielder", "central midfielder", "central midfielder",
+        "left midfielder", "right midfielder",
+        "striker"
+    },
+
+    // ---- 3-5-2 ----
+    {
+        "goalkeeper",
+        "center back", "center back", "center back",
+        "left wing back", "right wing back",
+        "defensive midfielder", "central midfielder", "attacking midfielder",
+        "striker", "striker"
+    },
+
+    // ---- 3-4-3 ----
+    {
+        "goalkeeper",
+        "center back", "center back", "center back",
+        "left midfielder", "right midfielder",
+        "central midfielder", "central midfielder",
+        "left winger", "right winger", "striker"
+    },
+
+    // ---- 5-3-2 ----
+    {
+        "goalkeeper",
+        "right back", "left back",
+        "center back", "center back", "center back",
+        "central midfielder", "central midfielder", "central midfielder",
+        "striker", "striker"
+    },
+
+    // ---- 5-4-1 ----
+    {
+        "goalkeeper",
+        "right back", "left back",
+        "center back", "center back", "center back",
+        "left midfielder", "right midfielder",
+        "central midfielder", "central midfielder",
+        "striker"
+    }
+};
+
+char formation[20];
 
 typedef struct Player
 {
@@ -92,6 +208,27 @@ typedef struct Player
 } Player;
 
 int players_count = 0;
+
+int getRoleIndex(const char *roleName) {
+    for (int i = 0; i < MAX_ROLES; i++) {
+        if (strcmp(validRoles[i], roleName) == 0) return i;
+    }
+    return -1;
+}
+
+int getStatusIndex(const char *status) {
+    for (int i = 0; i < MAX_STATUS; i++) {
+        if (strcmp(validStatus[i], status) == 0) return i;
+    }
+    return -1;
+}
+
+int getFormationIndex(const char *formation) {
+    for (int i = 0; i < MAX_FORMATIONS; i++) {
+        if (strcmp(formations[i], formation) == 0) return i;
+    }
+    return -1;
+}
 
 void clear_buffer()
 {
@@ -215,7 +352,90 @@ void loadFromFile(Player **arr)
     }
 
     fclose(fp);
+    
+    for(int i = 0; i < MAX_ROLES; i++){
+      for(int j = 0; j < players_count; j++){
+        if(strcmp(validRoles[i],(*arr)[j].role) == 0){
+         countRoles[i]++;
+        }
+      }
+    }
+    
+    for(int i = 0; i < MAX_STATUS; i++){
+      for(int j = 0; j < players_count; j++){
+        if(strcmp(validStatus[i],(*arr)[j].status) == 0){
+         countStatus[i]++;
+        }
+      }
+    }
+    
     printf(ORANGE "Loaded %d players from file.\n" RESET, players_count);
+}
+
+void saveFormation(){
+    FILE *fp = fopen("./formation.dat", "wb");
+    if (fp == NULL)
+    {
+        printf(RED "Error: Unable to save to file!\n" RESET);
+        return;
+    }
+    
+    if (strlen(formation) > 0)
+    {
+        fwrite(formation, sizeof(char), strlen(formation), fp);
+    }
+    
+    fclose(fp);
+}
+
+void loadFormation()
+{
+    FILE *fp = fopen("./formation.dat", "rb");
+    if (fp == NULL)
+    {
+        printf(YELLOW "No existing data file found. Starting fresh.\n" RESET);
+        strcpy(formation,"4-3-3");
+        saveFormation();
+        return;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long fileSize = ftell(fp);
+    rewind(fp);
+
+    if (fileSize == 0)
+    {
+        printf(ORANGE "Data file is empty. Starting fresh.\n" RESET);
+        strcpy(formation,"4-3-3");
+        saveFormation();
+        return;
+    }
+    
+    int str_len = fileSize / sizeof(char);
+
+    fread(formation, sizeof(char), str_len, fp);
+
+    fclose(fp);
+    
+    printf(ORANGE "Formation loaded, cutrent formation: %s\n" RESET, formation);
+}
+
+void updateFormation(Player **arr){
+  char new_formation[20];
+  
+  isValid("Enter new formation (4-3-3, 4-4-2, 4-2-3-1, 4-5-1, 3-5-2, 3-4-3, 5-3-2, 5-4-1): ", formations, MAX_FORMATIONS, new_formation, sizeof(new_formation));
+  
+  strcpy(formation, new_formation);
+  saveFormation();
+  
+  for(int i = 0; i < players_count; i++){
+    if(strcmp((*arr)[i].status, "not summoned") != 0){
+      strcpy((*arr)[i].status, "not summoned");
+    }
+  }
+  
+  saveToFile(*arr);
+  printf(GREEN "Formation updated successfully!\n" RESET);
 }
 
 void setCurrentDate(Date *date)
@@ -256,28 +476,168 @@ void displayPlayers(Player **arr)
     }
 }
 
+bool checkRegex(char *pattern, char *str){
+  regex_t regex;
+  int reti;
+  
+  regcomp(&regex, pattern, REG_EXTENDED);
+  reti = regexec(&regex, str, 0, NULL, 0);
+  if(reti){
+    return false;
+  }
+  return true;
+}
+
+bool validatePlayerFirstName(char *firstName){
+  char *pattern = "^[A-Za-z]{3,15}( [A-Za-z]{3,15}){0,1}$";
+  
+  if(!checkRegex(pattern, firstName)){
+    printf(YELLOW "The first name must contain only letters and be 3–30 characters long.\n" RESET);
+    return false;
+  }
+  
+  return true;
+}
+
+bool validatePlayerLastName(char *lastName){
+  char *pattern = "^[A-Za-z]{3,15}( [A-Za-z]{3,15}){0,1}$";
+  
+  if(!checkRegex(pattern, lastName)){
+    printf(YELLOW "The last name must contain only letters and be 3–30 characters long.\n" RESET);
+    return false;
+  }
+  
+  return true;
+}
+
+bool validateAge(int age){
+  if(age < 14 || age > 41){
+    printf(YELLOW "The age must be between 14 and 41.\n" RESET);
+    return false;
+  }
+  
+  return true;
+}
+
+bool validatePlayerNumber(Player **arr, int number){
+  if(number < 1 || number > 99){
+    printf(YELLOW "The number must be between 1 and 99.\n" RESET);
+    return false;
+  }
+  
+  for(int i = 0; i < players_count; i++){
+    if((*arr)[i].number == number){
+      printf(YELLOW "This number is already taken.\n" RESET);
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+bool validatePlayerGoals(int goals){
+  if(goals < 0){
+    printf(YELLOW "Goals must be positive.\n" RESET);
+    return false;
+  }
+  
+  return true;
+}
+
+bool checkStartingPlayerRoleAvailability(Player **arr, char role[100]){
+  int formationIndex = getFormationIndex(formation);
+  int found = 0;
+  int roleCount = 0;
+  
+  for(int i = 0; i < 11; i++){
+    if(strcmp(formationRoles[formationIndex][i], role) == 0){
+      found = 1;
+      roleCount++;
+    }
+  }
+  
+  if(!found){
+    printf(YELLOW "The role '%s' is not available in your current formation (%s)" RESET, role, formation);
+    return false;
+  }
+  
+  int startingPlayerRoleCount = 0;
+  
+  for(int i = 0; i < players_count; i++){
+    if(strcmp((*arr)[i].status, "starting") == 0){
+      if(strcmp((*arr)[i].role, role) == 0){
+        startingPlayerRoleCount++;
+      }
+    }
+  }
+  
+  if(startingPlayerRoleCount >= roleCount){
+    printf(YELLOW "The role '%s' is already taken in your current formation (%s)" RESET, role, formation);
+    return false;
+  }
+  
+  return true;
+}
+
 void addPlayers(Player **arr, int n)
 {
+  if(players_count == MAX_PLAYERS){
+    printf(YELLOW "You can't add more than 23 players in your team!\n" RESET);
+    return;
+  }
     for (int i = 0; i < n; i++)
     {
         Player newPlayer;
         newPlayer.id = (long)time(NULL);
 
         setCurrentDate(&newPlayer.registration_date);
+        do{
+          handle_fgets_input("Enter player's first name: ", newPlayer.first_name, sizeof(newPlayer.first_name));
+        }while(!validatePlayerFirstName(newPlayer.first_name));
+        
+        do{
+          handle_fgets_input("Enter player's last name: ", newPlayer.last_name, sizeof(newPlayer.last_name));
+        }while(!validatePlayerLastName(newPlayer.last_name));
 
-        handle_fgets_input("Enter player's first name: ", newPlayer.first_name, sizeof(newPlayer.first_name));
+        do{
+          inputNumber("Enter player's age: ", "%d", &newPlayer.age);
+        }while(!validateAge(newPlayer.age));
 
-        handle_fgets_input("Enter player's last name: ", newPlayer.last_name, sizeof(newPlayer.last_name));
+        do{
+          inputNumber("Enter player's number: ", "%d", &newPlayer.number);
+        }while(!validatePlayerNumber(arr, newPlayer.number));
+        
+        isValid("Enter player's role (Goalkeeper, Right Back, Left Back, Center Back, Right Wing Back, Left Wing Back, Defensive Midfielder, Central Midfielder, Attacking Midfielder, Left Midfielder, Right Midfielder, Left Winger, Right Winger, Center Forward, Striker): ", validRoles, MAX_ROLES, newPlayer.role, sizeof(newPlayer.role));
+        
+        int roleIndex = getRoleIndex(newPlayer.role);
+        if(countRoles[roleIndex] == maxPlayersPerRole[roleIndex]){
+          printf(YELLOW "This role is not available please add a player with diffrent role!" RESET);
+          return;
+        }else{
+          countRoles[roleIndex]++;
+        }
 
-        inputNumber("Enter player's age: ", "%d", &newPlayer.age);
+        do{
+          inputNumber("Enter player's goals: ", "%d", &newPlayer.goals);
+        }while(!validatePlayerGoals(newPlayer.goals));
 
-        inputNumber("Enter player's number: ", "%d", &newPlayer.number);
-
-        isValid("Enter player's role (gardien, defenseur, milieu, attaquant): ", validRoles, MAX_ROLES, newPlayer.role, sizeof(newPlayer.role));
-
-        inputNumber("Enter player's goals: ", "%d", &newPlayer.goals);
-
-        isValid("Enter player's status (titulaire, remplacant): ", validStatus, MAX_STATUS, newPlayer.status, sizeof(newPlayer.status));
+        isValid("Enter player's status (starting, bench, not summoned): ", validStatus, MAX_STATUS, newPlayer.status, sizeof(newPlayer.status));
+        
+        int statusIndex = getStatusIndex(newPlayer.status);
+        if(countStatus[statusIndex] == maxPlayersPerStatus[statusIndex]){
+          printf(YELLOW "This status is not available please add a player with diffrent status!" RESET);
+          return;
+        }else{
+          countStatus[statusIndex]++;
+        }
+        
+        if(strcmp(newPlayer.status, "starting") == 0){
+          if(!checkStartingPlayerRoleAvailability(arr, newPlayer.role)){
+            countRoles[roleIndex]--;
+            countStatus[statusIndex]--;
+            return;
+          }
+        }
 
         *arr = realloc(*arr, (players_count + 1) * sizeof(Player));
         if (*arr == NULL)
@@ -383,7 +743,7 @@ void displayPlayersByPost(Player **arr)
     }
 
     int found = 0;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_ROLES; i++)
     {
         printf(ORANGE "\n--- Players in role: %s ---\n" RESET, validRoles[i]);
         found = 0;
@@ -399,6 +759,84 @@ void displayPlayersByPost(Player **arr)
         {
             printf(YELLOW "No players found in this role.\n" RESET);
         }
+    }
+}
+
+void updatePlayerFirstName(Player **arr)
+{
+    if (players_count == 0)
+    {
+        printf(ORANGE "No players to update!\n" RESET);
+        return;
+    }
+
+    long id;
+    char firstName[100];
+    
+    inputNumber("Enter player ID: ", "%ld", &id);
+
+    int found = 0;
+    for (int i = 0; i < players_count; i++)
+    {
+        if ((*arr)[i].id == id)
+        {
+            do{
+              handle_fgets_input("Enter player's new first name: ", firstName, sizeof(firstName));
+            }while(!validatePlayerFirstName(firstName));
+            
+            strcpy((*arr)[i].first_name, firstName);
+            found = 1;
+            break;
+        }
+    }
+
+    if (found)
+    {
+        saveToFile(*arr);
+        printf(GREEN "Player first name updated successfully!\n" RESET);
+    }
+    else
+    {
+        printf(ORANGE "Player not found!\n" RESET);
+    }
+}
+
+void updatePlayerLastName(Player **arr)
+{
+    if (players_count == 0)
+    {
+        printf(ORANGE "No players to update!\n" RESET);
+        return;
+    }
+
+    long id;
+    char lastName[100];
+    
+    inputNumber("Enter player ID: ", "%ld", &id);
+
+    int found = 0;
+    for (int i = 0; i < players_count; i++)
+    {
+        if ((*arr)[i].id == id)
+        {
+            do{
+              handle_fgets_input("Enter player's new last name: ", lastName, sizeof(lastName));
+            }while(!validatePlayerLastName(lastName));
+            
+            strcpy((*arr)[i].last_name, lastName);
+            found = 1;
+            break;
+        }
+    }
+
+    if (found)
+    {
+        saveToFile(*arr);
+        printf(GREEN "Player last name updated successfully!\n" RESET);
+    }
+    else
+    {
+        printf(ORANGE "Player not found!\n" RESET);
     }
 }
 
@@ -419,8 +857,22 @@ void updatePlayerPost(Player **arr)
     {
         if ((*arr)[i].id == id)
         {
-            isValid("Enter new role (gardien, defenseur, milieu, attaquant): ", validRoles, MAX_ROLES, newRole, sizeof(newRole));
-
+            isValid("Enter new role (Goalkeeper, Right Back, Left Back, Center Back, Right Wing Back, Left Wing Back, Defensive Midfielder, Central Midfielder, Attacking Midfielder, Left Midfielder, Right Midfielder, Left Winger, Right Winger, Center Forward, Striker): ", validRoles, MAX_ROLES, newRole, sizeof(newRole));
+            
+            int newRoleIndex = getRoleIndex(newRole);
+            if(countRoles[newRoleIndex] == maxPlayersPerRole[newRoleIndex]){
+              printf(YELLOW "This role is not available please choose a diffrent one!" RESET);
+              return;
+            }else{
+              if(strcmp((*arr)[i].status, "starting") == 0){
+                if(!checkStartingPlayerRoleAvailability(arr, newRole)){
+                  return;
+                }
+              }
+              countRoles[newRoleIndex]++;
+              int oldRoleIndex = getRoleIndex((*arr)[i].role);
+              countRoles[oldRoleIndex]--;
+            }
             strcpy((*arr)[i].role, newRole);
             found = 1;
             break;
@@ -431,6 +883,56 @@ void updatePlayerPost(Player **arr)
     {
         saveToFile(*arr);
         printf(GREEN "Player role updated successfully!\n" RESET);
+    }
+    else
+    {
+        printf(ORANGE "Player not found!\n" RESET);
+    }
+}
+
+void updatePlayerStatus(Player **arr)
+{
+    if (players_count == 0)
+    {
+        printf(ORANGE "No players to update!\n" RESET);
+        return;
+    }
+
+    long id;
+    char newStatus[100];
+    inputNumber("Enter player ID: ", "%ld", &id);
+
+    int found = 0;
+    for (int i = 0; i < players_count; i++)
+    {
+        if ((*arr)[i].id == id)
+        {
+            isValid("Enter player's status (starting, bench, not summoned): ", validStatus, MAX_STATUS, newStatus, sizeof(newStatus));
+            
+            int newStatusIndex = getStatusIndex(newStatus);
+            if(countStatus[newStatusIndex] == maxPlayersPerStatus[newStatusIndex]){
+              printf(YELLOW "This status is not available please choose a diffrent one!" RESET);
+              return;
+            }else{
+              if(strcmp(newStatus, "starting") == 0){
+                if(!checkStartingPlayerRoleAvailability(arr, (*arr)[i].role)){
+                  return;
+                }
+              }
+              countStatus[newStatusIndex]++;
+              int oldStatusIndex = getStatusIndex((*arr)[i].status);
+              countStatus[oldStatusIndex]--;
+            }
+            strcpy((*arr)[i].status, newStatus);
+            found = 1;
+            break;
+        }
+    }
+
+    if (found)
+    {
+        saveToFile(*arr);
+        printf(GREEN "Player status updated successfully!\n" RESET);
     }
     else
     {
@@ -455,7 +957,10 @@ void updatePlayerAge(Player **arr)
     {
         if ((*arr)[i].id == id)
         {
-            inputNumber("Enter new age: ", "%d", &newAge);
+            do{
+              inputNumber("Enter new age: ", "%d", &newAge);
+            }while(!validateAge(newAge));
+            
             (*arr)[i].age = newAge;
             found = 1;
             break;
@@ -513,6 +1018,45 @@ void updatePlayerGoals(Player **arr)
     }
 }
 
+void updatePlayerNumber(Player **arr)
+{
+    if (players_count == 0)
+    {
+        printf(ORANGE "No players to update!\n" RESET);
+        return;
+    }
+
+    int newNumber;
+    long id;
+    inputNumber("Enter player ID: ", "%ld", &id);
+
+    int found = 0;
+    for (int i = 0; i < players_count; i++)
+    {
+        if ((*arr)[i].id == id)
+        {
+            do{
+              inputNumber("Enter new number: ", "%d", &newNumber);
+            }while(!validatePlayerNumber(arr, newNumber));
+            
+            (*arr)[i].number = newNumber;
+            found = 1;
+            break;
+        }
+    }
+
+    if (found)
+    {
+        saveToFile(*arr);
+
+        printf(GREEN "Player number updated successfully!\n" RESET);
+    }
+    else
+    {
+        printf(ORANGE "Player not found!\n" RESET);
+    }
+}
+
 void deletePlayer(Player **arr)
 {
     if (players_count == 0)
@@ -548,6 +1092,13 @@ void deletePlayer(Player **arr)
                 printf(ORANGE "Deletion cancelled.\n" RESET);
                 return;
             }
+            
+            int roleIndex = getRoleIndex((*arr)[i].role);
+            countRoles[roleIndex]--;
+    
+            int statusIndex = getStatusIndex((*arr)[i].status);
+            countStatus[statusIndex]--;
+            
             for (int j = i; j < players_count - 1; j++)
             {
                 (*arr)[j] = (*arr)[j + 1];
@@ -604,7 +1155,10 @@ void searchPlayerByAttr(Player **arr, const int attr)
     case SEARCH_BY_FIRST_NAME:
     {
         char firstName[100];
-        handle_fgets_input("Enter player's first name: ", firstName, sizeof(firstName));
+        
+        do{
+          handle_fgets_input("Enter player's first name: ", firstName, sizeof(firstName));
+        }while(!validatePlayerFirstName(firstName));
 
         int found = 0;
         for (int i = 0; i < players_count; i++)
@@ -624,7 +1178,10 @@ void searchPlayerByAttr(Player **arr, const int attr)
     case SEARCH_BY_LAST_NAME:
     {
         char lastName[100];
-        handle_fgets_input("Enter player's last name: ", lastName, sizeof(lastName));
+        
+        do{
+          handle_fgets_input("Enter player's last name: ", lastName, sizeof(lastName));
+        }while(!validatePlayerLastName(lastName));
 
         int found = 0;
         for (int i = 0; i < players_count; i++)
@@ -644,7 +1201,10 @@ void searchPlayerByAttr(Player **arr, const int attr)
     case SEARCH_BY_AGE:
     {
         int age;
-        inputNumber("Enter player's age: ", "%d", &age);
+        
+        do{
+          inputNumber("Enter player's age: ", "%d", &age);
+        }while(!validateAge(age));
 
         int found = 0;
         for (int i = 0; i < players_count; i++)
@@ -664,7 +1224,9 @@ void searchPlayerByAttr(Player **arr, const int attr)
     case SEARCH_BY_NUMBER:
     {
         int number;
-        inputNumber("Enter player's number: ", "%d", &number);
+        do{
+          inputNumber("Enter player's number: ", "%d", &number);
+        }while(!validatePlayerNumber(arr, number));
 
         int found = 0;
         for (int i = 0; i < players_count; i++)
@@ -684,7 +1246,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
     case SEARCH_BY_ROLE:
     {
         char role[100];
-        isValid("Enter player's role (gardien, defenseur, milieu, attaquant): ", validRoles, MAX_ROLES, role, sizeof(role));
+        isValid("Enter player's role (Goalkeeper, Right Back, Left Back, Center Back, Right Wing Back, Left Wing Back, Defensive Midfielder, Central Midfielder, Attacking Midfielder, Left Midfielder, Right Midfielder, Left Winger, Right Winger, Center Forward, Striker): ", validRoles, MAX_ROLES, role, sizeof(role));
 
         int found = 0;
         for (int i = 0; i < players_count; i++)
@@ -704,7 +1266,10 @@ void searchPlayerByAttr(Player **arr, const int attr)
     case SEARCH_BY_GOALS:
     {
         int goals;
-        inputNumber("Enter player's goals: ", "%d", &goals);
+        
+        do{
+          inputNumber("Enter player's goals: ", "%d", &goals);
+        }while(!validatePlayerGoals(goals));
 
         int found = 0;
         for (int i = 0; i < players_count; i++)
@@ -724,7 +1289,7 @@ void searchPlayerByAttr(Player **arr, const int attr)
     case SEARCH_BY_STATUS:
     {
         char status[100];
-        isValid("Enter player's status (titulaire, remplacant): ", validStatus, MAX_STATUS, status, sizeof(status));
+        isValid("Enter player's status (starting, bench, not summoned): ", validStatus, MAX_STATUS, status, sizeof(status));
 
         int found = 0;
         for (int i = 0; i < players_count; i++)
@@ -744,8 +1309,14 @@ void searchPlayerByAttr(Player **arr, const int attr)
     case SEARCH_BY_AGE_RANGE:
     {
         int minAge, maxAge;
-        inputNumber("Enter minimum age: ", "%d", &minAge);
-        inputNumber("Enter maximum age: ", "%d", &maxAge);
+        
+        do{
+          inputNumber("Enter minimum age: ", "%d", &minAge);
+        }while(!validateAge(minAge));
+        
+        do{
+          inputNumber("Enter maximum age: ", "%d", &maxAge);
+        }while(!validateAge(maxAge));
 
         if (minAge > maxAge)
         {
@@ -806,7 +1377,10 @@ void displayPlayersWithNGoals(Player **arr)
     }
 
     int n;
-    inputNumber("Enter minimum number of goals: ", "%d", &n);
+    
+    do{
+      inputNumber("Enter minimum number of goals: ", "%d", &n);
+    }while(!validatePlayerGoals(n));
 
     int found = 0;
     printf("Players with at least %d goals:\n", n);
@@ -888,25 +1462,43 @@ void displayMinMaxAge(Player **arr)
 
 void saveFakeDataToFile()
 {
-    Player fakeData[10] = {
-        {1625152800, "lionel", "messi", 34, 10, "attaquant", 30, {1, 7, 2021}, "titulaire"},
-        {1625239200, "cristiano", "ronaldo", 36, 7, "attaquant", 25, {2, 7, 2021}, "titulaire"},
-        {1625325600, "neymar", "jr", 29, 11, "attaquant", 20, {3, 7, 2021}, "titulaire"},
-        {1625412000, "kevin", "de bruyne", 30, 17, "milieu", 10, {4, 7, 2021}, "titulaire"},
-        {1625498400, "virgil", "van dijk", 30, 4, "defenseur", 5, {5, 7, 2021}, "titulaire"},
-        {1625584800, "manuel", "neuer", 35, 1, "gardien", 0, {6, 7, 2021}, "titulaire"},
-        {1625671200, "kylian", "mbappe", 22, 7, "attaquant", 15, {7, 7, 2021}, "titulaire"},
-        {1625757600, "luka", "modric", 36, 10, "milieu", 8, {8, 7, 2021}, "titulaire"},
-        {1625844000, "sergio", "ramos", 35, 4, "defenseur", 6, {9, 7, 2021}, "titulaire"},
-        {1625930400, "thibaut", "courtois", 29, 1, "gardien", 0, {10, 7, 2021}, "titulaire"}};
-
+    Player fakeData[22] = {
+        // ---- Starting XI (4-3-3) ----
+        { 1694770000, "Marc-Andre", "ter Stegen", 32,  1, "goalkeeper",            0, {15,9,2025}, "starting" },
+        { 1694770001, "Joao", "Cancelo",         30,  2, "right back",            0, {15,9,2025}, "starting" },
+        { 1694770002, "Alejandro", "Balde",      21,  3, "left back",             0, {15,9,2025}, "starting" },
+        { 1694770003, "Ronald", "Araujo",        25,  4, "center back",           0, {15,9,2025}, "starting" },
+        { 1694770004, "Jules", "Kounde",         26, 23, "center back",           0, {15,9,2025}, "starting" },
+        { 1694770005, "Oriol", "Romeu",          32, 18, "defensive midfielder",  0, {15,9,2025}, "starting" },
+        { 1694770006, "Pedri", "Gonzalez",       22,  8, "central midfielder",    0, {15,9,2025}, "starting" },
+        { 1694770007, "Frenkie", "de Jong",      28, 21, "central midfielder",    0, {15,9,2025}, "starting" },
+        { 1694770008, "Ferran", "Torres",        25,  7, "left winger",           0, {15,9,2025}, "starting" },
+        { 1694770009, "Raphinha", "Belloli",     28, 11, "right winger",          0, {15,9,2025}, "starting" },
+        { 1694770010, "Robert", "Lewandowski",   37,  9, "striker",               0, {15,9,2025}, "starting" },
+    
+        // ---- Bench (7 players) ----
+        { 1694770011, "Inaki", "Pena",           25, 13, "goalkeeper",            0, {15,9,2025}, "bench" },
+        { 1694770012, "Pau", "Cubarsi",          18,  4, "center back",           0, {15,9,2025}, "bench" },
+        { 1694770013, "Marcos", "Alonso",        34, 17, "left back",             0, {15,9,2025}, "bench" },
+        { 1694770014, "Gavi", "Paez",            21,  6, "central midfielder",    0, {15,9,2025}, "bench" },
+        { 1694770015, "Ilkay", "Gundogan",       34, 22, "attacking midfielder",  0, {15,9,2025}, "bench" },
+        { 1694770016, "Anssumane", "Fati",       22, 10, "left winger",           0, {15,9,2025}, "bench" },
+        { 1694770017, "Vitor", "Roque",          20, 19, "striker",               0, {15,9,2025}, "bench" },
+    
+        // ---- Not Summoned (4 players) ----
+        { 1694770018, "Sergi", "Roberto",        33, 20, "right wing back",       0, {15,9,2025}, "not summoned" },
+        { 1694770019, "Hector", "Fort",          19, 29, "left wing back",        0, {15,9,2025}, "not summoned" },
+        { 1694770020, "Marc", "Casado",          21, 30, "defensive midfielder",  0, {15,9,2025}, "not summoned" },
+        { 1694770021, "Lamine", "Yamal",         18, 27, "right midfielder",      0, {15,9,2025}, "not summoned" }
+    };
+    
     FILE *fp = fopen("./players.dat", "wb");
     if (fp == NULL)
     {
         printf("Error: Unable to save fake data to file!\n");
         return;
     }
-    fwrite(fakeData, sizeof(Player), 10, fp);
+    fwrite(fakeData, sizeof(Player), 22, fp);
     fclose(fp);
     printf("Fake data saved to file successfully!\n");
 }
@@ -918,6 +1510,8 @@ int main()
     Player *Players = NULL;
 
     loadFromFile(&Players);
+    
+    loadFormation();
 
     while (1)
     {
@@ -928,171 +1522,196 @@ int main()
         printf("Enter 4 to delete a players\n");
         printf("Enter 5 to search for a player\n");
         printf("Enter 6 to display statistics\n");
-        printf("Enter 7 to exit\n");
+        printf("Enter 7 to update formation\n");
+        printf("Enter 8 to exit\n");
 
         int choice;
         inputNumber("Your choice: ", "%d", &choice);
 
         switch (choice)
         {
-        case ADD:
-        {
-            printf(RED "\n=== Add Player Menu ===\n" RESET);
-            printf("Enter 1 to add a player\n");
-            printf("Enter 2 to add n players\n");
-            printf("Enter 3 to return to main menu\n");
-
-            int add_choice;
-            inputNumber("Your choice: ", "%d", &add_choice);
-
-            switch (add_choice)
-            {
-            case ADD_ONE:
-                addPlayers(&Players, 1);
-                break;
-            case ADD_MULTIPLE:
-                int n;
-                inputNumber("Enter number of players to add: ", "%d", &n);
-
-                addPlayers(&Players, n);
-                break;
-            case 3:
-                break;
-            default:
-                printf(YELLOW "Invalid choice\n" RESET);
-            }
+          case ADD:
+          {
+              printf(RED "\n=== Add Player Menu ===\n" RESET);
+              printf("Enter 1 to add a player\n");
+              printf("Enter 2 to add n players\n");
+              printf("Enter 3 to return to main menu\n");
+  
+              int add_choice;
+              inputNumber("Your choice: ", "%d", &add_choice);
+  
+              switch (add_choice)
+              {
+              case ADD_ONE:
+                  addPlayers(&Players, 1);
+                  break;
+              case ADD_MULTIPLE:{
+                  int n;
+                  inputNumber("Enter number of players to add: ", "%d", &n);
+  
+                  addPlayers(&Players, n);
+                  break;
+              }
+              case 3:
+                  break;
+              default:
+                  printf(YELLOW "Invalid choice\n" RESET);
+              }
+              break;
+          }
+          case DISPLAY:
+          {
+              printf(RED "\n=== Display Player Menu ===\n" RESET);
+              printf("Enter 1 to display all players\n");
+              printf("Enter 2 to display players sorted alphabetically by last name\n");
+              printf("Enter 3 to display players sorted by age\n");
+              printf("Enter 4 to display players by post\n");
+              printf("Enter 5 to return to main menu\n");
+  
+              int display_choice;
+  
+              inputNumber("Your choice: ", "%d", &display_choice);
+  
+              switch (display_choice)
+              {
+              case DISPLAY_ALL:
+                  displayPlayers(&Players);
+                  break;
+              case ALPHABETIC_SORT:
+                  sortPlayers(&Players, "alpha");
+                  break;
+              case AGE_SORT:
+                  sortPlayers(&Players, "age");
+                  break;
+              case DISPLAY_BY_POST:
+                  displayPlayersByPost(&Players);
+                  break;
+              case 5:
+                  break;
+              default:
+                  printf(YELLOW "Invalid choice\n" RESET);
+              }
+              break;
+          }
+          case UPDATE:
+          {
+              printf(RED "\n=== Update Player Menu ===\n" RESET);
+              printf("Enter 1 to update player's first name\n");
+              printf("Enter 2 to update player's last name\n");
+              printf("Enter 3 to update player's age\n");
+              printf("Enter 4 to update player's number\n");
+              printf("Enter 5 to update player's post\n");
+              printf("Enter 6 to update player's status\n");
+              printf("Enter 7 to update player's goals\n");
+              printf("Enter 8 to return to main menu\n");
+  
+              int update_choice;
+              inputNumber("Your choice: ", "%d", &update_choice);
+  
+              switch (update_choice)
+              {
+              case UPDATE_FIRST_NAME:
+                  updatePlayerFirstName(&Players);
+                  break;
+              case UPDATE_LAST_NAME:
+                  updatePlayerLastName(&Players);
+                  break;
+              case UPDATE_AGE:
+                  updatePlayerAge(&Players);
+                  break;
+              case UPDATE_NUMBER:
+                  updatePlayerNumber(&Players);
+                  break;
+              case UPDATE_POST:
+                  updatePlayerPost(&Players);
+                  break;
+              case UPDATE_STATUS:
+                  updatePlayerStatus(&Players);
+                  break;
+              case UPDATE_GOALS:
+                  updatePlayerGoals(&Players);
+                  break;
+              case 8:
+                  break;
+              default:
+                  printf(YELLOW "Invalid choice\n" RESET);
+              }
+              break;
+          }
+          case DELETE:{
+              deletePlayer(&Players);
+              break;
+          }
+          case SEARCH:
+          {
+              printf(RED "\n=== Search Player Menu ===\n" RESET);
+              printf("Enter 1 to search by ID\n");
+              printf("Enter 2 to search by first name\n");
+              printf("Enter 3 to search by last name\n");
+              printf("Enter 4 to search by age\n");
+              printf("Enter 5 to search by number\n");
+              printf("Enter 6 to search by role\n");
+              printf("Enter 7 to search by goals\n");
+              printf("Enter 8 to search by status\n");
+              printf("Enter 9 to search by age range\n");
+              printf("Enter 10 to return to main menu\n");
+  
+              int search_choice;
+              inputNumber("Your choice: ", "%d", &search_choice);
+  
+              searchPlayerByAttr(&Players, search_choice);
+              break;
+          }
+          case STATISTICS:
+          {
+              printf(RED "\n=== Statistics Menu ===\n" RESET);
+              printf("Enter 1 to display total number of players\n");
+              printf("Enter 2 to display average age of players\n");
+              printf("Enter 3 to display players with at least n goals\n");
+              printf("Enter 4 to display best scorer(s)\n");
+              printf("Enter 5 to display youngest and oldest player ages\n");
+              printf("Enter 6 to return to main menu\n");
+  
+              int stats_choice;
+              inputNumber("Your choice: ", "%d", &stats_choice);
+  
+              switch (stats_choice)
+              {
+              case TOTAL:
+                  displayPlayersTotal();
+                  break;
+              case AVG_AGE:
+                  displayAvgAge(&Players);
+                  break;
+              case GOALS:
+                  displayPlayersWithNGoals(&Players);
+                  break;
+              case BEST_SCOORER:
+                  displayBestScorer(&Players);
+                  break;
+              case MIN_MAX_AGE:
+                  displayMinMaxAge(&Players);
+                  break;
+              case 6:
+                  break;
+              default:
+                  printf(YELLOW "Invalid choice\n" RESET);
+              }
+              break;
+          }
+          case UPDATE_FORMATION:{
+            updateFormation(&Players);
             break;
-        }
-        case DISPLAY:
-        {
-            printf(RED "\n=== Display Player Menu ===\n" RESET);
-            printf("Enter 1 to display all players\n");
-            printf("Enter 2 to display players sorted alphabetically by last name\n");
-            printf("Enter 3 to display players sorted by age\n");
-            printf("Enter 4 to display players by post\n");
-            printf("Enter 5 to return to main menu\n");
-
-            int display_choice;
-
-            inputNumber("Your choice: ", "%d", &display_choice);
-
-            switch (display_choice)
-            {
-            case DISPLAY_ALL:
-                displayPlayers(&Players);
-                break;
-            case ALPHABETIC_SORT:
-                sortPlayers(&Players, "alpha");
-                break;
-            case AGE_SORT:
-                sortPlayers(&Players, "age");
-                break;
-            case DISPLAY_BY_POST:
-                displayPlayersByPost(&Players);
-                break;
-            case 5:
-                break;
-            default:
-                printf(YELLOW "Invalid choice\n" RESET);
-            }
-            break;
-        }
-        case UPDATE:
-        {
-            printf(RED "\n=== Update Player Menu ===\n" RESET);
-            printf("Enter 1 to update player's post\n");
-            printf("Enter 2 to update player's age\n");
-            printf("Enter 3 to update player's goals\n");
-            printf("Enter 4 to return to main menu\n");
-
-            int update_choice;
-            inputNumber("Your choice: ", "%d", &update_choice);
-
-            switch (update_choice)
-            {
-            case UPDATE_POST:
-                updatePlayerPost(&Players);
-                break;
-            case UPDATE_AGE:
-                updatePlayerAge(&Players);
-                break;
-            case UPDATE_GOALS:
-                updatePlayerGoals(&Players);
-                break;
-            case 4:
-                break;
-            default:
-                printf(YELLOW "Invalid choice\n" RESET);
-            }
-            break;
-        }
-        case DELETE:
-            deletePlayer(&Players);
-            break;
-        case SEARCH:
-        {
-            printf(RED "\n=== Search Player Menu ===\n" RESET);
-            printf("Enter 1 to search by ID\n");
-            printf("Enter 2 to search by first name\n");
-            printf("Enter 3 to search by last name\n");
-            printf("Enter 4 to search by age\n");
-            printf("Enter 5 to search by number\n");
-            printf("Enter 6 to search by role\n");
-            printf("Enter 7 to search by goals\n");
-            printf("Enter 8 to search by status\n");
-            printf("Enter 9 to search by age range\n");
-            printf("Enter 10 to return to main menu\n");
-
-            int search_choice;
-            inputNumber("Your choice: ", "%d", &search_choice);
-
-            searchPlayerByAttr(&Players, search_choice);
-            break;
-        }
-        case STATISTICS:
-        {
-            printf(RED "\n=== Statistics Menu ===\n" RESET);
-            printf("Enter 1 to display total number of players\n");
-            printf("Enter 2 to display average age of players\n");
-            printf("Enter 3 to display players with at least n goals\n");
-            printf("Enter 4 to display best scorer(s)\n");
-            printf("Enter 5 to display youngest and oldest player ages\n");
-            printf("Enter 6 to return to main menu\n");
-
-            int stats_choice;
-            inputNumber("Your choice: ", "%d", &stats_choice);
-
-            switch (stats_choice)
-            {
-            case TOTAL:
-                displayPlayersTotal();
-                break;
-            case AVG_AGE:
-                displayAvgAge(&Players);
-                break;
-            case GOALS:
-                displayPlayersWithNGoals(&Players);
-                break;
-            case BEST_SCOORER:
-                displayBestScorer(&Players);
-                break;
-            case MIN_MAX_AGE:
-                displayMinMaxAge(&Players);
-                break;
-            case 6:
-                break;
-            default:
-                printf(YELLOW "Invalid choice\n" RESET);
-            }
-            break;
-        }
-        case EXIT:
-            if (Players)
-                free(Players);
-            printf(ORANGE "Goodbye!\n" RESET);
-            exit(0);
-        default:
-            printf(YELLOW "Invalid choice\n" RESET);
+          }
+          case EXIT:{
+              if (Players)
+                  free(Players);
+              printf(ORANGE "Goodbye!\n" RESET);
+              exit(0);
+          }
+          default:{
+              printf(YELLOW "Invalid choice\n" RESET);
+          }
         }
     }
     return 0;
